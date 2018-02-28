@@ -7,7 +7,7 @@ defmodule Quantum.JobBroadcaster do
 
   require Logger
 
-  alias Quantum.{Job, Util}
+  alias Quantum.{Job, Util, Storage}
 
   @doc """
   Start Job Broadcaster
@@ -16,12 +16,13 @@ defmodule Quantum.JobBroadcaster do
 
    * `name` - Name of the GenStage
    * `jobs` - Array of `Quantum.Job`
+   * `persist_schedule` - Denotes whetehr to persist jobs in the storage`
 
   """
-  @spec start_link(GenServer.server(), [Job.t()]) :: GenServer.on_start()
-  def start_link(name, jobs) do
+  @spec start_link(GenServer.server(), [Job.t()], boolean()) :: GenServer.on_start()
+  def start_link(name, jobs, persist_schedule) do
     __MODULE__
-    |> GenStage.start_link(jobs, name: name)
+    |> GenStage.start_link({jobs, persist_schedule}, name: name)
     |> Util.start_or_link()
   end
 
@@ -32,16 +33,29 @@ defmodule Quantum.JobBroadcaster do
   end
 
   @doc false
-  def init(jobs) do
+  def init({jobs, persist_schedule}) do
+    effective_jobs =
+      if persist_schedule do
+        # Favor the jobs stored in the storage if persisnt_schedule is configured.
+        with [_h|_t] = stored_jobs <- Storage.get_all_jobs(), do: stored_jobs, else: jobs
+      else
+        jobs
+      end
+
     buffer =
-      jobs
+      effective_jobs
       |> Enum.filter(&(&1.state == :active))
       |> Enum.map(fn job -> {:add, job} end)
 
     state =
       %{}
-      |> Map.put(:jobs, Enum.reduce(jobs, %{}, fn job, acc -> Map.put(acc, job.name, job) end))
+      |> Map.put(:jobs, Enum.reduce(effective_jobs, %{}, fn job, acc -> Map.put(acc, job.name, job) end))
       |> Map.put(:buffer, buffer)
+
+    # Save the jobs (it could be that no jobs were retrieved from the storage, so we should save jobs to the storage)
+    if persist_schedule do
+      Storage.save_all(jobs)
+    end
 
     {:producer, state}
   end

@@ -32,7 +32,8 @@ defmodule Quantum.TaskStagesSupervisor do
           Quantum.JobBroadcaster,
           {
             Keyword.fetch!(opts, :job_broadcaster),
-            Keyword.fetch!(opts, :jobs)
+            Keyword.fetch!(opts, :jobs),
+            Keyword.fetch!(opts, :persist_schedule)
           }
         },
         {

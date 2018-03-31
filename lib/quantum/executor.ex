@@ -21,50 +21,62 @@ defmodule Quantum.Executor do
     * `message` - The Message to Execute (`{:execute, %Job{}}`)
 
   """
-  @spec start_link({GenServer.server(), GenServer.server()}, {:execute, Job.t()}) :: {:ok, pid}
-  def start_link({task_supervisor, task_registry}, {:execute, job}) do
+  @spec start_link({GenServer.server(), GenServer.server(), boolean()}, {:execute, Job.t()}) ::
+          {:ok, pid}
+  def start_link({task_supervisor, task_registry, debug_logging}, {:execute, job}) do
     Task.start_link(fn ->
-      execute(task_supervisor, task_registry, job)
+      execute(task_supervisor, task_registry, debug_logging, job)
     end)
   end
 
-  @spec execute(GenServer.server(), GenServer.server(), Job.t()) :: :ok
+  @spec execute(GenServer.server(), GenServer.server(), boolean(), Job.t()) :: :ok
   # Execute task on all given nodes without checking for overlap
-  defp execute(task_supervisor, _task_registry, %Job{overlap: true} = job) do
+  defp execute(
+         task_supervisor,
+         _task_registry,
+         debug_logging,
+         %Job{overlap: true, run_strategy: run_strategy} = job
+       ) do
     # Find Nodes to run on
     # Check if Node is up and running
     # Run Task
-    job.run_strategy
+    run_strategy
     |> NodeList.nodes(job)
     |> Enum.filter(&check_node(&1, task_supervisor, job))
-    |> Enum.each(&run(&1, job, task_supervisor))
+    |> Enum.each(&run(&1, job, task_supervisor, debug_logging))
 
     :ok
   end
 
   # Execute task on all given nodes with checking for overlap
-  defp execute(task_supervisor, task_registry, %Job{overlap: false} = job) do
-    Logger.debug(fn ->
-      "[#{inspect(Node.self())}][#{__MODULE__}] Start execution of job #{inspect(job.name)}"
-    end)
+  defp execute(
+         task_supervisor,
+         task_registry,
+         debug_logging,
+         %Job{overlap: false, run_strategy: run_strategy, name: job_name} = job
+       ) do
+    debug_logging &&
+      Logger.debug(fn ->
+        "[#{inspect(Node.self())}][#{__MODULE__}] Start execution of job #{inspect(job_name)}"
+      end)
 
     # Find Nodes to run on
     # Mark Running and only continue with item if it worked
     # Check if Node is up and running
     # Run Task
     # Mark Task as finished
-    job.run_strategy
+    run_strategy
     |> NodeList.nodes(job)
-    |> Enum.filter(&(TaskRegistry.mark_running(task_registry, job.name, &1) == :marked_running))
+    |> Enum.filter(&(TaskRegistry.mark_running(task_registry, job_name, &1) == :marked_running))
     |> Enum.filter(&check_node(&1, task_supervisor, job))
-    |> Enum.map(&run(&1, job, task_supervisor))
+    |> Enum.map(&run(&1, job, task_supervisor, debug_logging))
     |> Enum.each(fn {node, %Task{ref: ref}} ->
       receive do
         {^ref, _} ->
-          TaskRegistry.mark_finished(task_registry, job.name, node)
+          TaskRegistry.mark_finished(task_registry, job_name, node)
 
         {:DOWN, ^ref, _, _, _} ->
-          TaskRegistry.mark_finished(task_registry, job.name, node)
+          TaskRegistry.mark_finished(task_registry, job_name, node)
       end
     end)
 
@@ -72,28 +84,31 @@ defmodule Quantum.Executor do
   end
 
   # Ececute the given function on a given node via the task supervisor
-  @spec run(Node.t(), Job.t(), GenServer.server()) :: {Node.t(), Task.t()}
-  defp run(node, job, task_supervisor) do
-    Logger.debug(fn ->
-      "[#{inspect(Node.self())}][#{__MODULE__}] Task for job #{inspect(job.name)} started on node #{
-        inspect(node)
-      }"
-    end)
+  @spec run(Node.t(), Job.t(), GenServer.server(), boolean()) :: {Node.t(), Task.t()}
+  defp run(node, %{name: job_name, task: task}, task_supervisor, debug_logging) do
+    debug_logging &&
+      Logger.debug(fn ->
+        "[#{inspect(Node.self())}][#{__MODULE__}] Task for job #{inspect(job_name)} started on node #{
+          inspect(node)
+        }"
+      end)
 
     {
       node,
       Task.Supervisor.async_nolink({task_supervisor, node}, fn ->
-        Logger.debug(fn ->
-          "[#{inspect(Node.self())}][#{__MODULE__}] Execute started for job #{inspect(job.name)}"
-        end)
+        debug_logging &&
+          Logger.debug(fn ->
+            "[#{inspect(Node.self())}][#{__MODULE__}] Execute started for job #{inspect(job_name)}"
+          end)
 
-        result = execute_task(job.task)
+        result = execute_task(task)
 
-        Logger.debug(fn ->
-          "[#{inspect(Node.self())}][#{__MODULE__}] Execution ended for job #{inspect(job.name)}, which yielded result: #{
-            inspect(result)
-          }"
-        end)
+        debug_logging &&
+          Logger.debug(fn ->
+            "[#{inspect(Node.self())}][#{__MODULE__}] Execution ended for job #{inspect(job_name)}, which yielded result: #{
+              inspect(result)
+            }"
+          end)
 
         :ok
       end)
@@ -101,12 +116,12 @@ defmodule Quantum.Executor do
   end
 
   @spec check_node(Node.t(), GenServer.server(), Job.t()) :: boolean
-  defp check_node(node, task_supervisor, job) do
+  defp check_node(node, task_supervisor, %{name: job_name}) do
     if running_node?(node, task_supervisor) do
       true
     else
       Logger.warn(
-        "Node #{inspect(node)} is not running. Job #{inspect(job.name)} could not be executed."
+        "Node #{inspect(node)} is not running. Job #{inspect(job_name)} could not be executed."
       )
 
       false

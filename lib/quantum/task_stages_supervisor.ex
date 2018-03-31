@@ -33,14 +33,19 @@ defmodule Quantum.TaskStagesSupervisor do
           {
             Keyword.fetch!(opts, :job_broadcaster),
             Keyword.fetch!(opts, :jobs),
+<<<<<<< HEAD
             Keyword.fetch!(opts, :persist_schedule)
+=======
+            Keyword.fetch!(opts, :debug_logging)
+>>>>>>> upstream/master
           }
         },
         {
           Quantum.ExecutionBroadcaster,
           {
             Keyword.fetch!(opts, :execution_broadcaster),
-            Keyword.fetch!(opts, :job_broadcaster)
+            Keyword.fetch!(opts, :job_broadcaster),
+            Keyword.fetch!(opts, :debug_logging)
           }
         },
         {
@@ -49,7 +54,8 @@ defmodule Quantum.TaskStagesSupervisor do
             Keyword.fetch!(opts, :executor_supervisor),
             Keyword.fetch!(opts, :execution_broadcaster),
             Keyword.fetch!(opts, :task_supervisor),
-            Keyword.fetch!(opts, :task_registry)
+            Keyword.fetch!(opts, :task_registry),
+            Keyword.fetch!(opts, :debug_logging)
           }
         }
       ],

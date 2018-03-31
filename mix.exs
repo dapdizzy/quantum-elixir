@@ -3,7 +3,7 @@ defmodule Quantum.Mixfile do
 
   use Mix.Project
 
-  @version "2.2.5"
+  @version "2.2.7"
 
   def project do
     [
@@ -19,7 +19,10 @@ defmodule Quantum.Mixfile do
       start_permanent: Mix.env() == :prod,
       test_coverage: [tool: ExCoveralls],
       version: @version,
-      dialyzer: [ignore_warnings: "dialyzer.ignore-warnings"]
+      dialyzer: [
+        ignore_warnings: "dialyzer.ignore-warnings",
+        plt_add_apps: [:timex, :calendar]
+      ]
     ]
   end
 
@@ -44,8 +47,8 @@ defmodule Quantum.Mixfile do
       ],
       licenses: ["Apache License 2.0"],
       links: %{
-        "Changelog" => "https://github.com/c-rack/quantum-elixir/blob/master/CHANGELOG.md",
-        "GitHub" => "https://github.com/c-rack/quantum-elixir"
+        "Changelog" => "https://github.com/quantum-elixir/quantum-core/blob/master/CHANGELOG.md",
+        "GitHub" => "https://github.com/quantum-elixir/quantum-core"
       }
     }
   end
@@ -54,7 +57,7 @@ defmodule Quantum.Mixfile do
     [
       main: "readme",
       source_ref: "v#{@version}",
-      source_url: "https://github.com/c-rack/quantum-elixir",
+      source_url: "https://github.com/quantum-elixir/quantum-core",
       extras: [
         "README.md",
         "CHANGELOG.md",

@@ -17,7 +17,11 @@ defmodule Quantum do
     overlap: true,
     timezone: :utc,
     run_strategy: {Random, :cluster},
+<<<<<<< HEAD
     persist_schedule: false
+=======
+    debug_logging: true
+>>>>>>> upstream/master
   ]
 
   @doc """

@@ -23,10 +23,10 @@ defmodule Quantum.ExecutionBroadcasterTest do
 
   setup do
     {:ok, producer} = start_supervised({TestProducer, []})
-    {:ok, broadcaster} = start_supervised({ExecutionBroadcaster, {__MODULE__, producer}})
+    {:ok, broadcaster} = start_supervised({ExecutionBroadcaster, {__MODULE__, producer, true}})
     {:ok, _consumer} = start_supervised({TestConsumer, [broadcaster, self()]})
 
-    {:ok, %{producer: producer, broadcaster: broadcaster}}
+    {:ok, %{producer: producer, broadcaster: broadcaster, debug_logging: true}}
   end
 
   describe "add" do
@@ -141,6 +141,26 @@ defmodule Quantum.ExecutionBroadcasterTest do
 
         assert_receive {:received, {:execute, ^job_new}}, @max_timeout
       end)
+    end
+
+    test "DST creates no problems", %{debug_logging: debug_logging} do
+      state = %{jobs: [], time: ~N[2018-03-25 00:59:01], timer: nil, debug_logging: debug_logging}
+
+      job =
+        TestScheduler.new_job()
+        |> Job.set_schedule(~e[*])
+        |> Job.set_timezone("Europe/Zurich")
+
+      assert capture_log(fn ->
+               assert {:noreply, [],
+                       %{
+                         jobs: [
+                           {~N[2018-03-25 01:01:00], [^job]}
+                         ],
+                         time: ~N[2018-03-25 00:59:01],
+                         timer: {_, ~N[2018-03-25 01:01:00]}
+                       }} = ExecutionBroadcaster.handle_events([{:add, job}], self(), state)
+             end) =~ "Next execution time for job #{inspect(job.name)} is not a valid time."
     end
   end
 
